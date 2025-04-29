@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Time Tracker",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/timetracker.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}

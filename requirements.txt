@@ -1,0 +1,10 @@
+# Runtime dependencies
+screeninfo>=0.8.1
+
+# Development dependencies
+autopep8>=1.7.0
+pylint>=2.15.0
+
+# Build dependencies
+pyinstaller>=5.7.0
+pillow>=9.3.0  # For icon handling
