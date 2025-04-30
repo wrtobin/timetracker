@@ -1,5 +1,6 @@
 # Runtime dependencies
 screeninfo>=0.8.1
+appdirs>=1.4.4  # For configuration directory management
 
 # Development dependencies
 autopep8>=1.7.0

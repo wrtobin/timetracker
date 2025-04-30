@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-import csv, os
+import csv, os, json
 from datetime import datetime, time, timedelta
+import appdirs
+from pathlib import Path
 
 class TimeTrackerApp:
     def __init__(self, root):
@@ -10,8 +12,40 @@ class TimeTrackerApp:
         root.title("Time Tracker")
         root.geometry("600x400")
         
+        # App configuration management
+        self.app_name = "TimeTracker"
+        self.app_author = "TimeTracker"
+        self.config_dir = Path(appdirs.user_config_dir(self.app_name, self.app_author))
+        self.config_file = self.config_dir / "settings.json"
+        self.default_config = {
+            "recent_files": [],
+            "max_recent_files": 5,
+            "theme_mode": "dark",
+            "start_time": "07:00",
+            "end_time": "19:00",
+            "interval": 30,
+            "auto_record_seconds": 60,
+            "last_category": "",
+            "last_description": "",
+            "current_file": None,
+        }
+        self.config = self.load_config()
+        
         # Theme settings
-        self.theme_mode = "dark"  # Default to dark theme
+        self.theme_mode = self.config.get("theme_mode", "dark")
+        
+        # Initialize UI theme immediately (this was missing)
+        self.configure_theme()
+        
+        # File tracking settings
+        self.current_file = self.config.get("current_file", None)
+        self.has_unsaved_changes = False
+        self.recent_files = self.config.get("recent_files", [])
+        self.max_recent_files = self.config.get("max_recent_files", 5)
+        
+        # Last used values for form auto-population
+        self.last_category = self.config.get("last_category", "")
+        self.last_description = self.config.get("last_description", "")
         
         # Docking settings
         self.is_docked = False
@@ -23,29 +57,39 @@ class TimeTrackerApp:
         self._animation_after_id = None
         self._hover_check_id = None
         
-        self.configure_theme()
+        # Initialize timer-related attributes
+        self._after_id = None
+        self._countdown_after_id = None
+        self._auto_record_timer = None
+        self.next_reminder = None
 
         # Default settings
         self.start_time = time(7, 0)
         self.end_time   = time(19, 0)
         self.interval   = 30 # minutes
-        self.next_reminder = None
-        self._after_id = None  # track our scheduled callback
-        self._countdown_after_id = None  # track countdown updates
-        
-        # Store last entered values for auto-population
-        self.last_category = ""
-        self.last_description = ""
+        self.auto_record_seconds = 60  # configurable auto-record timeout
+        self.currently_editing = False  # track if user is actively editing
 
         # Menu
         menubar = tk.Menu(root)
         filem = tk.Menu(menubar, tearoff=0)
-        filem.add_command(label="Save…", command=self.save_data)
-        filem.add_command(label="Load…", command=self.load_data)
+        filem.add_command(label="New", command=self.new_file)
+        filem.add_command(label="Open...", command=self.load_data)
+        filem.add_command(label="Save", command=self.save_current_file, accelerator="Ctrl+S")
+        filem.add_command(label="Save As...", command=self.save_data)
+        filem.add_separator()
+        
+        # Recent files submenu
+        self.recent_files_menu = tk.Menu(filem, tearoff=0)
+        filem.add_cascade(label="Recent Files", menu=self.recent_files_menu)
+        
         filem.add_separator()
         filem.add_command(label="Exit", command=root.quit)
         menubar.add_cascade(label="File", menu=filem)
 
+        # Bind Ctrl+S to save
+        root.bind("<Control-s>", self.save_current_file)
+        
         settings = tk.Menu(menubar, tearoff=0)
         settings.add_command(label="Configure Reminders…", command=self.open_settings)
         settings.add_separator()
@@ -68,9 +112,46 @@ class TimeTrackerApp:
         # Main frame with background color
         main_frame = ttk.Frame(root, style='Main.TFrame')
         main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Entry section at the top
+        self.entry_frame = ttk.Frame(main_frame, style='Main.TFrame')
+        self.entry_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Category entry with combo box
+        ttk.Label(self.entry_frame, text="Category:").grid(row=0, column=0, sticky=tk.W, padx=5)
+        self.category_var = tk.StringVar(value=self.last_category)
+        self.category_combo = ttk.Combobox(self.entry_frame, textvariable=self.category_var, width=20)
+        self.category_combo.grid(row=0, column=1, sticky=tk.W, padx=5)
+        
+        # Description entry
+        ttk.Label(self.entry_frame, text="Description:").grid(row=0, column=2, sticky=tk.W, padx=5)
+        self.description_var = tk.StringVar(value=self.last_description)
+        self.description_entry = ttk.Entry(self.entry_frame, textvariable=self.description_var, width=40)
+        self.description_entry.grid(row=0, column=3, sticky=tk.W+tk.E, padx=5)
+        
+        # Save button
+        self.save_btn = ttk.Button(self.entry_frame, text="Save", command=self.save_entry)
+        self.save_btn.grid(row=0, column=4, padx=5)
+        
+        # Configure grid columns
+        self.entry_frame.columnconfigure(3, weight=1)
+        
+        # Bind events for entry fields
+        self.category_combo.bind("<KeyRelease>", self.on_entry_modified)
+        self.description_entry.bind("<KeyRelease>", self.on_entry_modified)
+        self.category_combo.bind("<<ComboboxSelected>>", self.on_entry_modified)
+        
+        # Enable validation and hotkeys
+        self.root.bind("<Return>", self.save_entry)
+        
+        # Hide entry section initially (will be shown on prompt)
+        self.entry_frame.pack_forget()
 
         # Table view - updated to have three columns
-        self.tree = ttk.Treeview(main_frame, columns=("ts", "category", "description"), show="headings", style="Treeview")
+        self.tree_frame = ttk.Frame(main_frame)
+        self.tree_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        self.tree = ttk.Treeview(self.tree_frame, columns=("ts", "category", "description"), show="headings", style="Treeview")
         self.tree.heading("ts", text="Timestamp")
         self.tree.heading("category", text="Category")
         self.tree.heading("description", text="Description")
@@ -79,31 +160,56 @@ class TimeTrackerApp:
         self.tree.column("description", width=320)
         
         # Add scrollbars to treeview
-        y_scroll = ttk.Scrollbar(main_frame, orient="vertical", command=self.tree.yview)
+        y_scroll = ttk.Scrollbar(self.tree_frame, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=y_scroll.set)
         
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         y_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # Status bar with countdown timer
+        # Enable editing by double-clicking on an item
+        self.tree.bind("<Double-1>", self.on_tree_double_click)
+        
+        # Status bar with countdown timer and progress bar
         self.status_frame = ttk.Frame(root, style='StatusBar.TFrame')
         self.status_frame.pack(fill=tk.X, side=tk.BOTTOM, padx=5, pady=5)
         
+        # Progress bar for auto-record countdown
+        self.progress_var = tk.DoubleVar(value=100)
+        self.progress = ttk.Progressbar(
+            self.status_frame, 
+            orient="horizontal", 
+            length=150, 
+            mode="determinate", 
+            variable=self.progress_var
+        )
+        self.progress.pack(side=tk.RIGHT, padx=(0, 10))
+        
+        # Countdown label
         self.countdown_label = ttk.Label(
             self.status_frame, 
             text="Next prompt: calculating...", 
             cursor="hand2",
             style="CountdownLabel.TLabel"
         )
-        self.countdown_label.pack(side=tk.RIGHT)
+        self.countdown_label.pack(side=tk.RIGHT, padx=(0, 10))
         
         # Make the countdown label clickable to trigger the prompt early
         self.countdown_label.bind("<Button-1>", self.trigger_prompt_early)
+        
+        # Currently editing item ID (for updating existing entries)
+        self.editing_item_id = None
 
         # Configure window events for docking behavior
         root.bind("<Enter>", self.on_mouse_enter)
         root.bind("<Leave>", self.on_mouse_leave)
         root.protocol("WM_DELETE_WINDOW", self.on_close)
+
+        # Update category list
+        self.update_category_list()
+
+        # Load the last used file if available
+        if self.current_file and os.path.exists(self.current_file):
+            self.load_file(self.current_file)
 
         # Kick off scheduling
         self.schedule_next()
@@ -115,10 +221,62 @@ class TimeTrackerApp:
             self.root.after_cancel(self._animation_after_id)
         if self._hover_check_id:
             self.root.after_cancel(self._hover_check_id)
+            
+        # Save application configuration
+        self.save_application_config()
         
         # Close the app
         self.root.destroy()
         
+    def save_application_config(self):
+        """Save application configuration to config file"""
+        # Update config with current values
+        self.config["theme_mode"] = self.theme_mode
+        self.config["recent_files"] = self.recent_files
+        self.config["max_recent_files"] = self.max_recent_files
+        self.config["start_time"] = self.start_time.strftime("%H:%M")
+        self.config["end_time"] = self.end_time.strftime("%H:%M")
+        self.config["interval"] = self.interval
+        self.config["auto_record_seconds"] = self.auto_record_seconds
+        
+        # Save form input history
+        self.config["last_category"] = self.last_category
+        self.config["last_description"] = self.last_description
+        
+        # Save the current file path
+        self.config["current_file"] = self.current_file
+        
+        # Save to file
+        self.save_config(self.config)
+        
+    def load_application_config(self):
+        """Load application configuration from config file"""
+        # Load settings from config
+        self.theme_mode = self.config.get("theme_mode", "dark")
+        self.recent_files = self.config.get("recent_files", [])
+        self.max_recent_files = self.config.get("max_recent_files", 5)
+        
+        # Handle time settings
+        try:
+            start_time = self.config.get("start_time", "07:00")
+            h, m = map(int, start_time.split(":"))
+            self.start_time = time(h, m)
+        except:
+            self.start_time = time(7, 0)
+            
+        try:
+            end_time = self.config.get("end_time", "19:00")
+            h, m = map(int, end_time.split(":"))
+            self.end_time = time(h, m)
+        except:
+            self.end_time = time(19, 0)
+            
+        self.interval = self.config.get("interval", 30)
+        self.auto_record_seconds = self.config.get("auto_record_seconds", 60)
+        
+        # Update recent files menu
+        self.update_recent_files_menu()
+
     def on_mouse_enter(self, event=None):
         """Handle mouse enter event for docked window"""
         if self.is_docked:
@@ -398,8 +556,8 @@ class TimeTrackerApp:
             # Constrain maximum height
             new_height = min(new_height, self.window_start_y + self.window_start_height - mon_y)
             new_y = self.window_start_y + dy
-            self.root.geometry(f"{self.window_start_width}x{new_height}+{self.window_start_x}+{new_y}")
-    
+            self.root.geometry(f"{self.window_start_width}x{new_height}+{new_y}")
+
     def undock_window(self):
         """Restore window to normal state"""
         if not self.is_docked:
@@ -916,243 +1074,348 @@ class TimeTrackerApp:
             self.show_prompt()
         
     def show_prompt(self):
-        # Clear the countdown after id if it exists
-        if self._countdown_after_id:
-            self.root.after_cancel(self._countdown_after_id)
-            self._countdown_after_id = None
+        """Show time entry prompt in main window"""
+        # Force window to foreground
+        self.root.attributes('-topmost', True)
+        self.root.attributes('-topmost', False)
         
-        dlg = tk.Toplevel(self.root)
-        dlg.title("Time Entry")
-        dlg.grab_set()
-        dlg.resizable(False, False)  # Make the dialog non-resizable
+        # Play notification sound
+        self.root.bell()
         
-        # Apply theme to dialog
-        if self.theme_mode == "dark":
-            bg_color = "#2E3440"
-            fg_color = "#ECEFF4"
-            dlg.configure(background=bg_color)
-        
-        # Create a frame for the form
-        form_frame = ttk.Frame(dlg)
-        form_frame.pack(padx=15, pady=10, fill=tk.X)
-        
-        # Get existing categories for autocomplete and dropdown
-        existing_categories = self.get_existing_categories()
-        
-        # Category section
-        category_frame = ttk.Frame(form_frame)
-        category_frame.pack(fill=tk.X, pady=5)
-        
-        ttk.Label(category_frame, text="Category:").pack(side=tk.LEFT)
-        
-        # Single widget for category entry and dropdown
-        category_var = tk.StringVar(value=self.last_category)
-        category_combobox = ttk.Combobox(
-            category_frame, 
-            textvariable=category_var,
-            values=existing_categories, 
-            width=30
-        )
-        category_combobox.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
-        
-        # Autocomplete function for category combobox
-        def update_autocomplete(event):
-            current_text = category_var.get()
-            if current_text:
-                matches = [cat for cat in existing_categories if current_text.lower() in cat.lower()]
-                if matches:
-                    category_combobox['values'] = matches
-                else:
-                    category_combobox['values'] = existing_categories
-            fields_modified()
-        
-        category_combobox.bind("<KeyRelease>", update_autocomplete)
-        category_combobox.bind("<<ComboboxSelected>>", lambda e: fields_modified())
-        
-        # Description section
-        desc_frame = ttk.Frame(form_frame)
-        desc_frame.pack(fill=tk.X, pady=5)
-        
-        ttk.Label(desc_frame, text="Description:").pack(side=tk.LEFT)
-        desc_entry = ttk.Entry(desc_frame, width=40)
-        desc_entry.insert(0, self.last_description)  # Auto-populate with last description
-        desc_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
-        
-        # Auto-record countdown
-        countdown_frame = ttk.Frame(form_frame)
-        countdown_frame.pack(fill=tk.X, pady=5)
-        
-        countdown_var = tk.StringVar(value="Auto-record in 60s")
-        
-        if self.theme_mode == "dark":
-            countdown_label = ttk.Label(countdown_frame, textvariable=countdown_var, style="CountdownLabel.TLabel")
+        # Find main frame to place the entry frame
+        for widget in self.root.winfo_children():
+            if isinstance(widget, ttk.Frame) and widget != self.status_frame:
+                main_frame = widget
+                break
         else:
-            countdown_label = ttk.Label(countdown_frame, textvariable=countdown_var, foreground="red")
+            # If not found, use the root as parent
+            main_frame = self.root
+        
+        # Show the entry section
+        self.entry_frame.pack_forget()  # First remove it if it's already packed
+        self.entry_frame.pack(in_=main_frame, fill=tk.X, padx=5, pady=5, before=self.tree_frame)
+        
+        # Focus on the category combo box
+        self.category_combo.focus_force()
+        
+        # Update category list
+        self.update_category_list()
+        
+        # Pre-populate with last values
+        self.category_var.set(self.last_category)
+        self.description_var.set(self.last_description)
+        
+        # Start auto-record countdown
+        self.start_auto_record_countdown(self.auto_record_seconds)
+        
+        # Schedule next reminder when current one starts
+        self.schedule_next()
+
+    def save_entry(self, event=None):
+        """Save the current entry data"""
+        category = self.category_var.get().strip()
+        description = self.description_var.get().strip()
+        
+        if not (category or description):  # Require at least one field to be filled
+            messagebox.showwarning("Empty Entry", "Please enter at least a category or description.")
+            return
             
-        countdown_label.pack(side=tk.RIGHT)
+        # Save as last entered values
+        self.last_category = category
+        self.last_description = description
         
-        # Variable to track if fields have been modified
-        modified = False
-        auto_record_timer = None
-        
-        # Function to handle field modifications
-        def fields_modified(event=None):
-            nonlocal modified, auto_record_timer
-            modified = True
+        # If editing an existing item, update it but preserve the original timestamp
+        if self.currently_editing and self.editing_item_id:
+            # Get the existing values including the original timestamp
+            existing_values = self.tree.item(self.editing_item_id)['values']
+            original_timestamp = existing_values[0]  # Keep the original timestamp
             
-            # Reset the timer if it exists
-            if auto_record_timer:
-                dlg.after_cancel(auto_record_timer)
+            # Update the item with the original timestamp and new category/description
+            self.tree.item(self.editing_item_id, values=(original_timestamp, category, description))
+            self.currently_editing = False
+            self.editing_item_id = None
+        else:
+            # Insert a new item with current timestamp
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.tree.insert("", "end", values=(ts, category, description))
+        
+        # Mark as modified
+        self.mark_as_modified()
+        
+        # Clear the entry fields
+        self.category_var.set("")
+        self.description_var.set("")
+        
+        # Hide entry frame
+        self.entry_frame.pack_forget()
+        
+        # Cancel auto-record timer
+        if self._auto_record_timer:
+            self.root.after_cancel(self._auto_record_timer)
+            self._auto_record_timer = None
+        
+        # Schedule next reminder
+        self.schedule_next()
+
+    def on_entry_modified(self, event=None):
+        """Handle when the user modifies an entry field to reset the auto-record timer"""
+        # Mark that user is actively editing
+        self.currently_editing = True
+        
+        # Reset the auto-record countdown when the user makes changes
+        self.start_auto_record_countdown(self.auto_record_seconds)
+
+    def on_tree_double_click(self, event=None):
+        """Handle double-click on treeview item to edit it"""
+        # Get the selected item
+        item_id = self.tree.focus()
+        if not item_id:
+            return
             
-            # Restart the countdown
-            start_auto_record_countdown(60)
+        # Get the current values
+        values = self.tree.item(item_id)['values']
+        if not values or len(values) < 3:
+            return
         
-        # Function to update the countdown display
-        def update_countdown_display(seconds):
-            countdown_var.set(f"Auto-record in {seconds}s")
-            if seconds > 0:
-                return dlg.after(1000, lambda: update_countdown_display(seconds - 1))
-            else:
-                auto_record()
-                return None
+        # Find main frame to place the entry frame
+        for widget in self.root.winfo_children():
+            if isinstance(widget, ttk.Frame) and widget != self.status_frame:
+                main_frame = widget
+                break
+        else:
+            # If not found, use the root as parent
+            main_frame = self.root
         
-        # Function to start the auto-record countdown
-        def start_auto_record_countdown(seconds):
-            nonlocal auto_record_timer
-            auto_record_timer = update_countdown_display(seconds)
+        # Show entry fields
+        self.entry_frame.pack_forget()  # First remove it if it's already packed
+        self.entry_frame.pack(in_=main_frame, fill=tk.X, padx=5, pady=5, before=self.tree_frame)
         
-        # Function to auto-record after timeout
-        def auto_record():
-            category = category_var.get().strip()
-            description = desc_entry.get().strip()
-            
-            if category or description:  # At least one field should be filled
-                ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                # Save as last entered values
-                self.last_category = category
-                self.last_description = description
-                # Add [Auto-recorded] tag
-                self.tree.insert("", "end", values=(ts, category, f"{description} [Auto-recorded]"))
-            
-            dlg.destroy()
-            self.schedule_next()
+        # Set the current values
+        self.category_var.set(values[1])
+        self.description_var.set(values[2].replace(" [Auto-recorded]", ""))
         
-        # Bind field modification events
-        desc_entry.bind("<KeyRelease>", fields_modified)
+        # Set the editing item ID
+        self.editing_item_id = item_id
+        self.currently_editing = True
         
-        # Set initial focus and tab order
-        category_combobox.focus_force()
+        # Focus on category field
+        self.category_combo.focus_force()
         
-        def on_ok():
-            category = category_var.get().strip()
-            description = desc_entry.get().strip()
-            
-            if category or description:  # At least one field should be filled
-                ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                # Save as last entered values
-                self.last_category = category
-                self.last_description = description
-                self.tree.insert("", "end", values=(ts, category, description))
-            
-            # Cancel any auto-record timer
-            if auto_record_timer:
-                dlg.after_cancel(auto_record_timer)
-                
-            dlg.destroy()
-            self.schedule_next()
+        # Start auto-record countdown
+        self.start_auto_record_countdown(self.auto_record_seconds)
         
-        def on_cancel():
-            # Cancel any auto-record timer
-            if auto_record_timer:
-                dlg.after_cancel(auto_record_timer)
-                
-            dlg.destroy()
-            # Important: reschedule even when canceling
-            self.schedule_next()
+        # Bring window to front
+        self.root.attributes('-topmost', True)
+        self.root.attributes('-topmost', False)
         
-        # Button frame
-        button_frame = ttk.Frame(form_frame)
-        button_frame.pack(pady=10)
-        
-        ttk.Button(button_frame, text="OK", command=on_ok).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Cancel", command=on_cancel).pack(side=tk.LEFT, padx=5)
-        
-        # Handle Enter key for OK
-        dlg.bind("<Return>", lambda e: on_ok())
-        dlg.bind("<Escape>", lambda e: on_cancel())
-        
-        # Handle window close event
-        dlg.protocol("WM_DELETE_WINDOW", on_cancel)
-        
-        # Tab navigation
-        category_combobox.bind("<Tab>", lambda e: desc_entry.focus_set())
-        desc_entry.bind("<Tab>", lambda e: category_combobox.focus_set())
-        
-        # Position dialog at cursor position
-        # Must update first to get correct window size
-        dlg.update_idletasks()
-        
-        # Get cursor position
-        cursor_x = self.root.winfo_pointerx()
-        cursor_y = self.root.winfo_pointery()
-        
-        # Get dialog dimensions
-        dialog_width = dlg.winfo_reqwidth()
-        dialog_height = dlg.winfo_reqheight()
-        
-        # Calculate position centered on cursor
-        x_pos = cursor_x - dialog_width // 2
-        y_pos = cursor_y - dialog_height // 2
-        
-        # Get screen dimensions
-        screen_width = dlg.winfo_screenwidth()
-        screen_height = dlg.winfo_screenheight()
-        
-        # Make sure dialog stays on screen
-        if x_pos < 0:
-            x_pos = 0
-        elif x_pos + dialog_width > screen_width:
-            x_pos = screen_width - dialog_width
-            
-        if y_pos < 0:
-            y_pos = 0
-        elif y_pos + dialog_height > screen_height:
-            y_pos = screen_height - dialog_height
-        
-        # Set dialog position
-        dlg.geometry(f"+{x_pos}+{y_pos}")
-        
-        # Start the auto-record countdown
-        start_auto_record_countdown(60)
-        
+        # Play notification sound to attract attention
         self.root.bell()
 
-    def save_data(self):
-        path = filedialog.asksaveasfilename(defaultextension=".csv",
-                                            filetypes=[("CSV files","*.csv")])
-        if not path: return
-        with open(path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["timestamp", "category", "description"])
-            for row in self.tree.get_children():
-                writer.writerow(self.tree.item(row)["values"])
-        messagebox.showinfo("Saved", os.path.basename(path))
+    def update_category_list(self):
+        """Update the category list in the combobox from the treeview"""
+        categories = self.get_existing_categories()
+        self.category_combo['values'] = categories
 
+    def mark_as_modified(self):
+        """Mark the file as having unsaved changes and update window title"""
+        if not self.has_unsaved_changes:
+            self.has_unsaved_changes = True
+            self.update_window_title()
+            
+    def update_window_title(self):
+        """Update the window title based on current file and modified status"""
+        title = "Time Tracker"
+        
+        if self.current_file:
+            # Get the base filename without extension
+            basename = os.path.splitext(os.path.basename(self.current_file))[0]
+            title = f"Time Tracker - {basename}"
+            
+        if self.has_unsaved_changes:
+            title += " *"
+            
+        self.root.title(title)
+    
+    def new_file(self):
+        """Create a new empty file"""
+        # Check for unsaved changes first
+        if self.has_unsaved_changes and self.tree.get_children():
+            if not messagebox.askyesno("Unsaved Changes", 
+                                      "You have unsaved changes. Create a new file anyway?"):
+                return
+                
+        # Clear the treeview
+        self.tree.delete(*self.tree.get_children())
+        
+        # Reset current file and modified status
+        self.current_file = None
+        self.has_unsaved_changes = False
+        self.update_window_title()
+    
+    def save_current_file(self, event=None):
+        """Save to the current file or prompt for a location if none"""
+        if self.current_file:
+            return self.save_to_file(self.current_file)
+        else:
+            return self.save_data()
+    
+    def save_to_file(self, filepath):
+        """Save data to the specified file path"""
+        try:
+            with open(filepath, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["timestamp", "category", "description"])
+                for row in self.tree.get_children():
+                    writer.writerow(self.tree.item(row)["values"])
+            
+            # Update current file and status
+            self.current_file = filepath
+            self.has_unsaved_changes = False
+            self.update_window_title()
+            
+            # Add to recent files
+            self.add_to_recent_files(filepath)
+            
+            return True
+        except Exception as e:
+            messagebox.showerror("Save Error", f"Error saving file: {e}")
+            return False
+    
+    def save_data(self):
+        """Save data to a new file location"""
+        path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV files","*.csv")],
+            initialfile="" if not self.current_file else os.path.basename(self.current_file)
+        )
+        if not path: 
+            return False
+            
+        success = self.save_to_file(path)
+        return success
+    
     def load_data(self):
+        """Load data from a file"""
+        # Check for unsaved changes first
+        if self.has_unsaved_changes and self.tree.get_children():
+            if not messagebox.askyesno("Unsaved Changes", 
+                                      "You have unsaved changes. Load a new file anyway?"):
+                return
+                
         path = filedialog.askopenfilename(filetypes=[("CSV files","*.csv")])
-        if not path: return
-        with open(path, newline="", encoding="utf-8") as f:
-            reader = csv.reader(f)
-            next(reader, None)  # skip header
-            self.tree.delete(*self.tree.get_children())
-            for row in reader:
-                if len(row) == 2:  # Handle old format
-                    ts, description = row
-                    category = ""
-                    self.tree.insert("", "end", values=(ts, category, description))
-                elif len(row) >= 3:  # New format
-                    self.tree.insert("", "end", values=(row[0], row[1], row[2]))
-        messagebox.showinfo("Loaded", os.path.basename(path))
+        if not path: 
+            return
+            
+        self.load_file(path)
+    
+    def load_file(self, filepath):
+        """Load data from the specified file path"""
+        try:
+            with open(filepath, newline="", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                next(reader, None)  # skip header
+                self.tree.delete(*self.tree.get_children())
+                for row in reader:
+                    if len(row) == 2:  # Handle old format
+                        ts, description = row
+                        category = ""
+                        self.tree.insert("", "end", values=(ts, category, description))
+                    elif len(row) >= 3:  # New format
+                        self.tree.insert("", "end", values=(row[0], row[1], row[2]))
+            
+            # Update current file and status
+            self.current_file = filepath
+            self.has_unsaved_changes = False
+            self.update_window_title()
+            
+            # Add to recent files
+            self.add_to_recent_files(filepath)
+            
+            # Update category list
+            self.update_category_list()
+            return True
+        except Exception as e:
+            messagebox.showerror("Load Error", f"Error loading file: {e}")
+            return False
+    
+    def add_to_recent_files(self, filepath):
+        """Add a file to the recent files list"""
+        # Remove if already in list
+        if filepath in self.recent_files:
+            self.recent_files.remove(filepath)
+            
+        # Add to front of list
+        self.recent_files.insert(0, filepath)
+        
+        # Trim if needed
+        if len(self.recent_files) > self.max_recent_files:
+            self.recent_files = self.recent_files[:self.max_recent_files]
+            
+        # Update menu
+        self.update_recent_files_menu()
+    
+    def update_recent_files_menu(self):
+        """Update the recent files dropdown menu"""
+        # Clear existing items
+        self.recent_files_menu.delete(0, tk.END)
+        
+        # Add recent files
+        if not self.recent_files:
+            self.recent_files_menu.add_command(label="No recent files", state=tk.DISABLED)
+        else:
+            for path in self.recent_files:
+                basename = os.path.basename(path)
+                # Use lambda with default arg to avoid late binding issues
+                self.recent_files_menu.add_command(
+                    label=basename, 
+                    command=lambda p=path: self.load_file(p)
+                )
+
+    def load_config(self):
+        """Load the configuration from the config file, or create default if it doesn't exist"""
+        if not self.config_file.exists():
+            self.save_config(self.default_config)
+            return self.default_config
+        
+        with open(self.config_file, "r") as f:
+            config = json.load(f)
+        return config
+
+    def save_config(self, config):
+        """Save the configuration to the config file"""
+        self.config_dir.mkdir(parents=True, exist_ok=True)  # Create config directory if it doesn't exist
+        with open(self.config_file, "w") as f:
+            json.dump(config, f, indent=4)
+
+    def start_auto_record_countdown(self, seconds):
+        """Start the auto-record countdown with progress bar"""
+        # Cancel existing timer if any
+        if self._auto_record_timer:
+            self.root.after_cancel(self._auto_record_timer)
+            self._auto_record_timer = None
+            
+        # Reset progress bar to full
+        self.progress_var.set(100)
+        
+        # Calculate the decrement amount for each second
+        decrement_per_sec = 100 / seconds
+        
+        def update_progress_and_countdown(remaining_seconds, current_progress):
+            if remaining_seconds <= 0:
+                # Time's up, finalize the record
+                self.auto_record_entry()
+                return
+                
+            # Update progress bar
+            new_progress = current_progress - decrement_per_sec
+            self.progress_var.set(max(0, new_progress))
+            
+            # Schedule next update
+            self._auto_record_timer = self.root.after(1000, lambda: 
+                update_progress_and_countdown(remaining_seconds - 1, new_progress))
+        
+        # Start the countdown
+        update_progress_and_countdown(seconds, 100)
 
 if __name__ == "__main__":
     root = tk.Tk()
