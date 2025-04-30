@@ -31,8 +31,10 @@ def install_dependencies():
     # Determine the correct pip command based on platform and virtual env
     if platform.system() == "Windows":
         pip_cmd = os.path.join(".venv", "Scripts", "pip")
+        python_cmd = os.path.join(".venv", "Scripts", "python")
     else:
         pip_cmd = os.path.join(".venv", "bin", "pip")
+        python_cmd = os.path.join(".venv", "bin", "python")
         
     # Check if requirements.txt exists
     if not os.path.exists("requirements.txt"):
@@ -41,7 +43,9 @@ def install_dependencies():
         
     print("Installing dependencies...")
     try:
-        subprocess.run([pip_cmd, "install", "-U", "pip"], check=True)
+        # Upgrade pip using the proper method to avoid the self-upgrade issue
+        subprocess.run([python_cmd, "-m", "pip", "install", "--upgrade", "pip"], check=True)
+        # Install requirements
         subprocess.run([pip_cmd, "install", "-r", "requirements.txt"], check=True)
         print("Dependencies installed successfully.")
         return True
