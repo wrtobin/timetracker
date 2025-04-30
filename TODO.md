@@ -11,6 +11,7 @@ See [README.md](README.md) for current features and usage instructions.
 - [x] Add visual countdown timer with progress bar for auto-record
 - [x] Make auto-record timeout configurable in settings
 - [x] Implement audio cue for prompting user attention
+- [x] Pre-populate form with last used category and description
 - [ ] Refine entry field validation and error handling
 - [ ] Add keyboard shortcuts for common actions
 - [ ] Implement advanced categorization with hierarchical tags
@@ -20,6 +21,7 @@ See [README.md](README.md) for current features and usage instructions.
 - [x] Add Ctrl+S shortcut to save current file
 - [x] Display filename in window title with unsaved changes indicator
 - [x] Add persistent recent files list with configuration storage
+- [x] Auto-load the most recently used file at application startup
 - [ ] Implement autosave functionality with configurable intervals
 - [ ] Add backup file creation before saving
 
@@ -49,6 +51,7 @@ See [README.md](README.md) for current features and usage instructions.
 ## Low Priority
 
 ### Polish
+- [x] Fix theme initialization to properly apply dark/light theme at startup
 - [ ] Add more theme options
 - [ ] Create a proper icon and application branding
 - [ ] Add internationalization support
