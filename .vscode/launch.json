@@ -1,13 +1,26 @@
 {
     "version": "0.2.0",
     "configurations": [
+      
         {
             "name": "Python: Time Tracker",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/timetracker.py",
             "console": "integratedTerminal",
-            "justMyCode": true
+            "justMyCode": true,
+            "preLaunchTask": "Generate Protocol Schema"
+        },
+        {
+            "name": "Python: Time Tracker (Debug Mode)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/timetracker.py",
+            "args": ["--debug"],
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "purpose": ["debug-in-terminal"],
+            "preLaunchTask": "Generate Protocol Schema"
         }
     ]
 }

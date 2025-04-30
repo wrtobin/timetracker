@@ -2,7 +2,6 @@
     "recommendations": [
         "ms-python.python",
         "ms-python.vscode-pylance",
-        "njpwerner.autodocstring",
-        "streetsidesoftware.code-spell-checker"
+        "njpwerner.autodocstring"
     ]
 }
