@@ -59,11 +59,20 @@ class Application:
         """Load the last used file if available."""
         try:
             # Get list of recent files using the message bus
+            
+            # Create a simple dictionary payload - don't use Pydantic models
+            # This ensures consistent payload handling through the system
+            payload = {
+                "storage_type": "file",
+                "limit": 1
+            }
+            
+            # Create the request with a standard dictionary payload
             request = GetStorageListRequest(
                 msg_id=str(uuid.uuid4()),
-                storage_type="file",
-                limit=1
+                payload=payload
             )
+            
             response = self.message_bus.send(request)
             
             if response and response.success:
@@ -74,10 +83,10 @@ class Application:
                     storage_id = most_recent_file.get("storage_id")
                     
                     if storage_id and os.path.exists(storage_id):
+                        # Again use a dictionary for the payload
                         load_request = LoadStorageRequest(
                             msg_id=str(uuid.uuid4()),
-                            storage_id=storage_id,
-                            storage_type="file"
+                            payload={"storage_id": storage_id, "storage_type": "file"}
                         )
                         load_response = self.message_bus.send(load_request)
                         

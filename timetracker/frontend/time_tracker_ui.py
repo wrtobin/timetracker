@@ -374,7 +374,8 @@ class TimeTrackerUI:
     
     def _load_last_file(self):
         """Load the last used file if available."""
-        current_file = self.config.get("current_file")
+        # Let the controller handle getting the current file via message bus
+        current_file = self.controller.get_current_file()
         if current_file and os.path.exists(current_file):
             self._load_file(current_file)
     
@@ -598,17 +599,31 @@ class TimeTrackerUI:
         # Clear existing items
         self.recent_files_menu.delete(0, tk.END)
         
-        # Add recent files
-        if not self.recent_files:
+        # Get recent files from controller (which uses message bus)
+        recent_files_info = self.controller.get_recent_files()
+        
+        # Extract file paths from storage info objects
+        recent_files = []
+        for file_info in recent_files_info:
+            if file_info.get("storage_type") == "file" and "storage_id" in file_info:
+                path = file_info.get("storage_id")
+                if path and os.path.exists(path):
+                    recent_files.append(path)
+        
+        # Add recent files to menu
+        if not recent_files:
             self.recent_files_menu.add_command(label="No recent files", state=tk.DISABLED)
         else:
-            for path in self.recent_files:
+            for path in recent_files:
                 basename = os.path.basename(path)
                 # Use lambda with default arg to avoid late binding issues
                 self.recent_files_menu.add_command(
                     label=basename, 
                     command=lambda p=path: self._load_file(p)
                 )
+        
+        # Update local cache for UI state
+        self.recent_files = recent_files
     
     def _update_category_list(self):
         """Update the category list in the combobox."""

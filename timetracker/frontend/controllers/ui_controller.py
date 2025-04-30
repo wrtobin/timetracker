@@ -23,7 +23,8 @@ from ...protocol.generated_schema import (
     GetStorageListRequest,
     HasUnsavedChangesRequest,
     ClearStorageRequest,
-    Response
+    Response,
+    StorageListFilterPayload
 )
 
 logger = logging.getLogger(__name__)
@@ -156,7 +157,7 @@ class UIController:
             logger.error(f"Failed to get categories: {response.error_message if response else 'No response'}")
             return []
             
-        return response.payload.get("categories", [])
+        return response.payload.get("categories", []) if response.payload else []
         
     def load_file(self, filepath: str) -> bool:
         """
@@ -220,7 +221,7 @@ class UIController:
             logger.error(f"Failed to check for unsaved changes: {response.error_message if response else 'No response'}")
             return False
             
-        return response.payload.get("has_unsaved_changes", False)
+        return response.payload.get("has_unsaved_changes", False) if response.payload else False
         
     def get_current_file(self) -> Optional[str]:
         """
@@ -237,7 +238,7 @@ class UIController:
             logger.error(f"Failed to get current file: {response.error_message if response else 'No response'}")
             return None
             
-        storage_info = response.payload.get("storage_info", {})
+        storage_info = response.payload.get("storage_info", {}) if response.payload else {}
         if storage_info.get("storage_type") == "file":
             return storage_info.get("storage_id")
         return None
@@ -269,16 +270,31 @@ class UIController:
         Returns:
             List of storage info dictionaries for recent files
         """
-        # Create and send request through message bus
+        # Import the required types
+        from ...protocol.generated_schema import StorageListFilterPayload, FilterStorageType
+        
+        # Add debug logging
+        logger.debug("Creating GetStorageListRequest with storage_type='file' and limit=%s", limit)
+        
+        # Create a properly typed StorageListFilterPayload object
+        # Use literal "file" which will be converted to FilterStorageType by the model
+        filter_payload = StorageListFilterPayload(storage_type="file", limit=limit)
+        
+        # Create the request with proper typing
         request = GetStorageListRequest(
-            msg_id=str(uuid.uuid4()), 
-            storage_type="file",
-            limit=limit
+            msg_id=str(uuid.uuid4()),
+            # Use model_dump() for Pydantic v2 or dict() for Pydantic v1
+            payload=filter_payload.dict() if hasattr(filter_payload, "dict") else filter_payload.model_dump()
         )
+        
+        # Debug log the request to verify payload is correctly set
+        logger.debug(f"Request created: msg_type={request.msg_type}, payload={request.payload}")
+        
+        # Send the request
         response = self._message_bus.send(request)
         
         if not response or not response.success:
             logger.error(f"Failed to get recent files: {response.error_message if response else 'No response'}")
             return []
             
-        return response.payload.get("storage_list", [])
+        return response.payload.get("storage_list", []) if response.payload else []

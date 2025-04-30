@@ -299,7 +299,8 @@
             "msg_type": {
               "enum": [
                 "ADD_TIME_ENTRY"
-              ]
+              ],
+              "const": "ADD_TIME_ENTRY"
             },
             "payload": {
               "type": "object",
@@ -356,7 +357,8 @@
             "msg_type": {
               "enum": [
                 "UPDATE_TIME_ENTRY"
-              ]
+              ],
+              "const": "UPDATE_TIME_ENTRY"
             },
             "payload": {
               "type": "object",
@@ -384,7 +386,8 @@
             "msg_type": {
               "enum": [
                 "DELETE_TIME_ENTRY"
-              ]
+              ],
+              "const": "DELETE_TIME_ENTRY"
             },
             "payload": {
               "type": "object",
@@ -412,7 +415,8 @@
             "msg_type": {
               "enum": [
                 "GET_CATEGORIES"
-              ]
+              ],
+              "const": "GET_CATEGORIES"
             },
             "payload": {
               "type": "object",
@@ -498,7 +502,8 @@
             "msg_type": {
               "enum": [
                 "SAVE_STORAGE"
-              ]
+              ],
+              "const": "SAVE_STORAGE"
             },
             "payload": {
               "type": "object",
@@ -524,7 +529,8 @@
             "msg_type": {
               "enum": [
                 "SAVE_STORAGE_AS"
-              ]
+              ],
+              "const": "SAVE_STORAGE_AS"
             },
             "payload": {
               "type": "object",
@@ -556,7 +562,8 @@
             "msg_type": {
               "enum": [
                 "NEW_STORAGE"
-              ]
+              ],
+              "const": "NEW_STORAGE"
             },
             "payload": {
               "type": "object",
@@ -581,7 +588,8 @@
             "msg_type": {
               "enum": [
                 "GET_CURRENT_STORAGE"
-              ]
+              ],
+              "const": "GET_CURRENT_STORAGE"
             }
           }
         }
@@ -685,7 +693,8 @@
             "msg_type": {
               "enum": [
                 "HAS_UNSAVED_CHANGES"
-              ]
+              ],
+              "const": "HAS_UNSAVED_CHANGES"
             }
           }
         }
@@ -730,7 +739,8 @@
             "msg_type": {
               "enum": [
                 "CLEAR_STORAGE"
-              ]
+              ],
+              "const": "CLEAR_STORAGE"
             }
           }
         }

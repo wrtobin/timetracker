@@ -18,6 +18,7 @@ The goal for v0.3 is to refactor the application into a clear frontend/backend s
     - [x] Implement the service interface
     - [x] Add backend implementation for file storage
     - [x] Update UI controller to use message bus for file operations
+    - [x] Fix payload handling issues in storage operations
   - [ ] ReminderService (scheduling, notifications)
 - [x] Create frontend controller to translate UI events to protocol messages
 - [x] Convert direct function calls to message-based communication
@@ -27,6 +28,7 @@ The goal for v0.3 is to refactor the application into a clear frontend/backend s
 - [x] Implement in-memory message bus for frontend/backend communication
 - [x] Fix KeyError for 'timestamp' in TimeTrackerUI
 - [x] Standardize timestamp field naming convention (using end_time as the primary field)
+- [x] Fix message type handling in protocol schema generation
 - [IN PROGRESS] Move all business logic from UI to appropriate service classes
 - [ ] Ensure complete test coverage for backend services
 
@@ -35,6 +37,7 @@ The goal for v0.3 is to refactor the application into a clear frontend/backend s
 - [IN PROGRESS] Create clean interfaces for all services 
 - [ ] Add proper dependency injection patterns
 - [x] Implement logging throughout the application
+- [ ] Improve error handling and debug logging
 - [ ] Add unit tests for critical components
 - [ ] Update build scripts to handle new project structure
 

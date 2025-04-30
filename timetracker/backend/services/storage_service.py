@@ -420,8 +420,9 @@ class FileStorageService(StorageServiceInterface):
     def get_storage_list(self, request: GetStorageListRequest) -> Response:
         """Get a list of recent files."""
         try:
-            storage_type = request.payload.get('storage_type', 'all')
-            limit = request.payload.get('limit', self._max_recent_files)
+            # Access attributes directly on the Pydantic model
+            storage_type = request.payload.storage_type or 'all'
+            limit = request.payload.limit or self._max_recent_files
             
             # For now, only file type is supported
             if storage_type not in ['file', 'all']:
