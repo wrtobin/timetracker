@@ -3,7 +3,42 @@
 This document outlines planned enhancements and known issues for the Time Tracker application.
 See [README.md](README.md) for current features and usage instructions.
 
-## High Priority
+## v0.3 Service Architecture Refactoring (Current Focus)
+
+The goal for v0.3 is to refactor the application into a clear frontend/backend separation while maintaining identical user-facing behavior. This will enable future improvements like alternative frontends (web, mobile) and remote service capabilities.
+
+### Core Architecture Changes
+- [x] Define a formal interaction protocol between frontend and backend components
+- [x] Create a JSON schema for all message types in the protocol
+- [x] Implement backend service classes for core functionality:
+  - [x] TimeEntryService (entry management, categories, etc.)
+  - [ ] ConfigurationService (settings, user preferences)
+  - [x] FileStorageService (file operations, recent files)
+    - [x] Define message types for file operations
+    - [x] Implement the service interface
+    - [x] Add backend implementation for file storage
+    - [x] Update UI controller to use message bus for file operations
+  - [ ] ReminderService (scheduling, notifications)
+- [x] Create frontend controller to translate UI events to protocol messages
+- [x] Convert direct function calls to message-based communication
+  - [x] Time entry operations
+  - [x] File operations
+  - [ ] Configuration operations
+- [x] Implement in-memory message bus for frontend/backend communication
+- [x] Fix KeyError for 'timestamp' in TimeTrackerUI
+- [x] Standardize timestamp field naming convention (using end_time as the primary field)
+- [IN PROGRESS] Move all business logic from UI to appropriate service classes
+- [ ] Ensure complete test coverage for backend services
+
+### Project Structure Improvements
+- [x] Reorganize codebase into packages (frontend, backend, protocol)
+- [IN PROGRESS] Create clean interfaces for all services 
+- [ ] Add proper dependency injection patterns
+- [x] Implement logging throughout the application
+- [ ] Add unit tests for critical components
+- [ ] Update build scripts to handle new project structure
+
+## High Priority (Post v0.3)
 
 ### UI and Workflow Improvements
 - [x] Replace popup prompt with direct entry in the main window
@@ -24,11 +59,12 @@ See [README.md](README.md) for current features and usage instructions.
 - [x] Auto-load the most recently used file at application startup
 - [ ] Implement autosave functionality with configurable intervals
 - [ ] Add backup file creation before saving
+- [ ] Support for storage abstraction (files, database, cloud)
 
 ### Architecture Improvements
-- [ ] Refactor to service-based architecture (see roadmap below)
 - [ ] Move to a proper database rather than CSV for data storage
-- [ ] Implement proper dependency injection for better testability
+- [ ] Implement cross-platform file and configuration handling
+- [ ] Add proper error handling and recovery mechanisms
 
 ## Medium Priority
 
@@ -66,30 +102,24 @@ See [README.md](README.md) for current features and usage instructions.
 4. No proper installation script or package
 5. Limited keyboard navigation support
 
-## Service-Based Architecture Roadmap
+## Future Service Architecture Roadmap (v0.4+)
 
-### Phase 1: Planning and Design
-- [ ] Define service interfaces and responsibilities
-- [ ] Design data flow between UI and services
-- [ ] Create domain models separate from UI representation
-- [ ] Plan transition strategy with minimal disruption
+### Process Separation
+- [ ] Extract backend into a standalone service process
+- [ ] Implement inter-process communication (IPC) 
+- [ ] Add proper service discovery and connection management
+- [ ] Implement connection resilience and reconnection logic
 
-### Phase 2: Core Services Implementation
-- [ ] Create TimeTrackingService to manage entries and categories
-- [ ] Develop FileService for file operations and persistence
-- [ ] Implement ConfigurationService for app settings and user preferences
-- [ ] Build NotificationService for reminders and alerts
+### Remote Access
+- [ ] Implement secure client-server communication
+- [ ] Create WebSocket or REST API for remote clients
+- [ ] Add authentication and permission system
+- [ ] Develop web frontend as alternative interface
 
-### Phase 3: UI Decoupling
-- [ ] Convert direct function calls to service requests
-- [ ] Implement message bus or event dispatcher for UI-service communication
-- [ ] Create UI-specific view models that map to domain models
-- [ ] Refactor UI components to consume services through defined interfaces
-
-### Phase 4: Advanced Features
+### Advanced Features
 - [ ] Add plugin architecture for extensibility
 - [ ] Implement proper logging and telemetry services
-- [ ] Create synchronization service for potential cloud/remote storage
+- [ ] Create synchronization service for cloud/remote storage
 - [ ] Support for multiple concurrent views of the same data
 
 ### Benefits of Service Architecture

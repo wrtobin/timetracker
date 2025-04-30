@@ -1,0 +1,770 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TimeTracker Protocol Schema",
+  "description": "Schema definition for TimeTracker protocol messages",
+  "definitions": {
+    "StorageType": {
+      "type": "string",
+      "title": "StorageType",
+      "description": "Type of storage backend",
+      "enum": [
+        "file",
+        "database",
+        "cloud",
+        "memory"
+      ]
+    },
+    "MessageType": {
+      "type": "string",
+      "title": "MessageType",
+      "description": "Type of the message",
+      "enum": [
+        "GET_TIME_ENTRIES",
+        "ADD_TIME_ENTRY",
+        "UPDATE_TIME_ENTRY",
+        "DELETE_TIME_ENTRY",
+        "GET_CATEGORIES",
+        "LOAD_STORAGE",
+        "SAVE_STORAGE",
+        "SAVE_STORAGE_AS",
+        "NEW_STORAGE",
+        "GET_CURRENT_STORAGE",
+        "GET_STORAGE_LIST",
+        "HAS_UNSAVED_CHANGES",
+        "CLEAR_STORAGE",
+        "SUCCESS",
+        "ERROR"
+      ]
+    },
+    "FilterStorageType": {
+      "type": "string",
+      "title": "FilterStorageType",
+      "description": "Filter by storage type",
+      "enum": [
+        "file",
+        "database",
+        "cloud",
+        "memory",
+        "all"
+      ]
+    },
+    "TimeEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the time entry"
+        },
+        "start_time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Start time of the entry"
+        },
+        "end_time": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "description": "End time of the entry, null if ongoing"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Optional description of the time entry"
+        },
+        "category": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Optional category of the time entry"
+        }
+      },
+      "required": [
+        "id",
+        "start_time"
+      ],
+      "additionalProperties": false
+    },
+    "Category": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the category"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the category"
+        },
+        "color": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Optional color for the category"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "StorageInfo": {
+      "type": "object",
+      "properties": {
+        "storage_id": {
+          "type": "string",
+          "description": "Identifier for the storage location"
+        },
+        "display_name": {
+          "type": "string",
+          "description": "User-friendly name for the storage"
+        },
+        "storage_type": {
+          "$ref": "#/definitions/StorageType"
+        },
+        "modified": {
+          "type": "boolean",
+          "description": "Whether there are unsaved changes"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Additional metadata about the storage"
+        }
+      },
+      "required": [
+        "storage_id",
+        "storage_type"
+      ],
+      "additionalProperties": false
+    },
+    "BaseMessage": {
+      "type": "object",
+      "properties": {
+        "msg_type": {
+          "$ref": "#/definitions/MessageType"
+        },
+        "msg_id": {
+          "type": "string",
+          "description": "Unique identifier for the message"
+        }
+      },
+      "required": [
+        "msg_type",
+        "msg_id"
+      ],
+      "additionalProperties": true
+    },
+    "Request": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/BaseMessage"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "payload": {
+              "type": "object",
+              "description": "Request payload data"
+            }
+          }
+        }
+      ]
+    },
+    "Response": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/BaseMessage"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "description": "ID of the request this response corresponds to"
+            },
+            "success": {
+              "type": "boolean",
+              "description": "Whether the request was successful"
+            },
+            "error_message": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Error message if success is false"
+            },
+            "payload": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "description": "Response payload data"
+            }
+          },
+          "required": [
+            "request_id",
+            "success"
+          ]
+        }
+      ]
+    },
+    "GetTimeEntriesRequest": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Request"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "GET_TIME_ENTRIES"
+              ],
+              "const": "GET_TIME_ENTRIES"
+            },
+            "payload": {
+              "type": "object",
+              "title": "TimeEntriesFilter",
+              "properties": {
+                "start_date": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "end_date": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "category": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "GetTimeEntriesResponse": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Response"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "SUCCESS",
+                "ERROR"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "title": "TimeEntriesPayload",
+              "properties": {
+                "time_entries": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/TimeEntry"
+                  }
+                }
+              },
+              "required": [
+                "time_entries"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "AddTimeEntryRequest": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Request"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "ADD_TIME_ENTRY"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "title": "TimeEntryPayload",
+              "properties": {
+                "time_entry": {
+                  "$ref": "#/definitions/TimeEntry"
+                }
+              },
+              "required": [
+                "time_entry"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "AddTimeEntryResponse": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Response"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "SUCCESS",
+                "ERROR"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "title": "TimeEntryPayload",
+              "properties": {
+                "time_entry": {
+                  "$ref": "#/definitions/TimeEntry"
+                }
+              },
+              "required": [
+                "time_entry"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "UpdateTimeEntryRequest": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Request"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "UPDATE_TIME_ENTRY"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "title": "TimeEntryPayload",
+              "properties": {
+                "time_entry": {
+                  "$ref": "#/definitions/TimeEntry"
+                }
+              },
+              "required": [
+                "time_entry"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "DeleteTimeEntryRequest": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Request"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "DELETE_TIME_ENTRY"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "title": "EntryIdPayload",
+              "properties": {
+                "entry_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "entry_id"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "GetCategoriesRequest": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Request"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "GET_CATEGORIES"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "title": "EmptyPayload",
+              "properties": {}
+            }
+          }
+        }
+      ]
+    },
+    "GetCategoriesResponse": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Response"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "SUCCESS",
+                "ERROR"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "title": "CategoriesPayload",
+              "properties": {
+                "categories": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/Category"
+                  }
+                }
+              },
+              "required": [
+                "categories"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "LoadStorageRequest": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Request"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "LOAD_STORAGE"
+              ],
+              "const": "LOAD_STORAGE"
+            },
+            "payload": {
+              "type": "object",
+              "title": "LoadStoragePayload",
+              "properties": {
+                "storage_id": {
+                  "type": "string",
+                  "description": "Identifier for the storage to load (e.g., file path)"
+                },
+                "storage_type": {
+                  "$ref": "#/definitions/StorageType"
+                }
+              },
+              "required": [
+                "storage_id"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "SaveStorageRequest": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Request"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "SAVE_STORAGE"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "title": "StorageIdPayload",
+              "properties": {
+                "storage_id": {
+                  "type": "string",
+                  "description": "Identifier for the current storage"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SaveStorageAsRequest": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Request"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "SAVE_STORAGE_AS"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "title": "SaveStorageAsPayload",
+              "properties": {
+                "storage_id": {
+                  "type": "string",
+                  "description": "Identifier for the new storage location"
+                },
+                "storage_type": {
+                  "$ref": "#/definitions/StorageType"
+                }
+              },
+              "required": [
+                "storage_id"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "NewStorageRequest": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Request"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "NEW_STORAGE"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "title": "StorageTypePayload",
+              "properties": {
+                "storage_type": {
+                  "$ref": "#/definitions/StorageType"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "GetCurrentStorageRequest": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Request"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "GET_CURRENT_STORAGE"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "GetCurrentStorageResponse": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Response"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "SUCCESS",
+                "ERROR"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "title": "StorageInfoPayload",
+              "properties": {
+                "storage_info": {
+                  "$ref": "#/definitions/StorageInfo"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "GetStorageListRequest": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Request"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "GET_STORAGE_LIST"
+              ],
+              "const": "GET_STORAGE_LIST"
+            },
+            "payload": {
+              "type": "object",
+              "title": "StorageListFilterPayload",
+              "properties": {
+                "storage_type": {
+                  "$ref": "#/definitions/FilterStorageType"
+                },
+                "limit": {
+                  "type": "integer",
+                  "description": "Maximum number of items to return"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "GetStorageListResponse": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Response"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "SUCCESS",
+                "ERROR"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "title": "StorageListPayload",
+              "properties": {
+                "storage_list": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/StorageInfo"
+                  }
+                }
+              },
+              "required": [
+                "storage_list"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "HasUnsavedChangesRequest": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Request"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "HAS_UNSAVED_CHANGES"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "HasUnsavedChangesResponse": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Response"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "SUCCESS",
+                "ERROR"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "title": "UnsavedChangesPayload",
+              "properties": {
+                "has_unsaved_changes": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "has_unsaved_changes"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "ClearStorageRequest": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Request"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "CLEAR_STORAGE"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "StorageResponse": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Response"
+        },
+        {
+          "properties": {
+            "msg_type": {
+              "enum": [
+                "SUCCESS",
+                "ERROR"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "title": "StorageInfoPayload",
+              "properties": {
+                "storage_info": {
+                  "$ref": "#/definitions/StorageInfo"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "info": {
+    "version": "0.3.0",
+    "title": "TimeTracker Protocol Schema"
+  }
+}

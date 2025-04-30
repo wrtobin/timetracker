@@ -1,6 +1,10 @@
 # Runtime dependencies
 screeninfo>=0.8.1
 appdirs>=1.4.4  # For configuration directory management
+jsonschema>=4.17.0  # For message schema validation
+
+# Type generation from JSON Schema
+datamodel-code-generator>=0.17.1  # For generating Python classes from JSON Schema
 
 # Development dependencies
 autopep8>=1.7.0
